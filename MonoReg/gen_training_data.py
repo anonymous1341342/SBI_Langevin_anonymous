@@ -78,6 +78,7 @@ def main(task_id):
     #####################################
     #        Save Training Data         #
     #####################################
+    os.makedirs('training_data', exist_ok=True)
     np.save(f'training_data/theta_r0_task{task_id}.npy', theta_r0.cpu().numpy())
     np.save(f'training_data/data_r0_task{task_id}.npy', data_r0.cpu().numpy())
 

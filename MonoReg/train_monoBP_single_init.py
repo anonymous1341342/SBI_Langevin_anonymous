@@ -158,6 +158,7 @@ def main(task_id):
     # train the model
     bias_lastlayer = train_deb(model, optimizer, dataloader, val_dataloader, g, g1, num_epochs, scheduler, early_stop_patience)
 
+    os.makedirs('model_single_init', exist_ok=True)
     torch.save({
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),

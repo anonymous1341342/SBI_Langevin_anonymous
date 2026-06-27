@@ -1,5 +1,3 @@
-setwd("...") # fill in the path to your working directory
-
 library(ggplot2)
 library(dplyr)
 library(tidyr)

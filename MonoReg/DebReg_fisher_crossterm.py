@@ -188,11 +188,11 @@ def main(task_id):
     optimizer = optim.Adam(DebReg_model.parameters(), lr=pen_learning_rate)
     train_DebReg_fisher_crossterm(DebReg_model, optimizer, train_loader, val_loader, pen_num_epochs, lam_curve, best_val_reg_loss)
 
+    os.makedirs('DebRegModel_fisher_crossterm', exist_ok=True)
     torch.save(DebReg_model, f'DebRegModel_fisher_crossterm/model_task{task_id}.pth')
 
 
 if __name__ == "__main__":
     task_id = sys.argv[1]
     main(task_id)
-
 

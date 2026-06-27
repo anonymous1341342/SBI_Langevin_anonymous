@@ -341,6 +341,7 @@ def main(task_id):
     bias_lastlayer = train_fisher(model, optimizer, dataloader, val_dataloader, dataloader_extra, val_dataloader_extra, lam_fisher, g, g1, num_epochs, scheduler)
 
 
+    os.makedirs('model_single_fisher', exist_ok=True)
     torch.save({
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),

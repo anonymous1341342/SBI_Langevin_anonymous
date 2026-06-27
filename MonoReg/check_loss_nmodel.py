@@ -179,9 +179,11 @@ def main(task_id, Fisher, training_size):
 
     # ======== Save the results ======== #
     if Fisher:
+        os.makedirs("check_loss", exist_ok=True)
         pd.DataFrame([res]).to_csv(f'check_loss/loss_task{task_id}_trainsize{training_size}_fisher.csv', index=False)
         pd.DataFrame([scale]).to_csv(f'check_loss/scale_task{task_id}_trainsize{training_size}_fisher.csv', index=False)
     else:
+        os.makedirs("check_loss", exist_ok=True)
         pd.DataFrame([res]).to_csv(f'check_loss/loss_task{task_id}_trainsize{training_size}_init.csv', index=False)
         pd.DataFrame([scale]).to_csv(f'check_loss/scale_task{task_id}_trainsize{training_size}_init.csv', index=False)
 
@@ -197,4 +199,3 @@ if __name__ == "__main__":
     main(task_id, Fisher = False, training_size = int(1e5))
     main(task_id, Fisher = True, training_size = int(1e5))
     main(task_id, Fisher = True, training_size = int(5e5))
-

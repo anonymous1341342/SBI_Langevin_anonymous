@@ -1,5 +1,3 @@
-setwd("...") # fill in the path to your working directory
-
 x_sum        <- as.matrix(read.csv("x_sum.csv", header = FALSE))
 theta_post   <- as.matrix(read.csv("theta_post.csv", header = FALSE))[1:5000, ]
 est_post     <- as.matrix(read.csv("est_post.csv", header = FALSE))

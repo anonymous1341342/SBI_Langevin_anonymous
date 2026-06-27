@@ -185,10 +185,12 @@ def main(task_id, Fisher):
 
     # ======== Save the results ======== #
     if Fisher == "cross":
+        os.makedirs("check_loss", exist_ok=True)
         pd.DataFrame([res]).to_csv(f'check_loss/loss_task{task_id}_fisher_cross.csv', index=False)
         pd.DataFrame([scale]).to_csv(f'check_loss/scale_task{task_id}_fisher_cross.csv', index=False)
 
     if Fisher == "noDeb":
+        os.makedirs("check_loss", exist_ok=True)
         pd.DataFrame([res]).to_csv(f'check_loss/loss_task{task_id}_fisher_noDeb.csv', index=False)
         pd.DataFrame([scale]).to_csv(f'check_loss/scale_task{task_id}_fisher_noDeb.csv', index=False)
 
@@ -204,4 +206,3 @@ if __name__ == "__main__":
     task_id = sys.argv[1]
     main(task_id, Fisher = "cross")
     main(task_id, Fisher = "noDeb")
-

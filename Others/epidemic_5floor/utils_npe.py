@@ -1,0 +1,293 @@
+import torch
+import lightning as L
+from torch.utils.data import DataLoader, Dataset, random_split
+import yaml
+import numpy as np
+import pandas as pd
+import glob
+from sklearn.datasets import make_moons
+import torch
+from torch.nn import Linear, ReLU
+from torch.distributions.normal import Normal
+from torch.distributions.multivariate_normal import MultivariateNormal
+
+# class DataModule(L.LightningDataModule):
+#     def __init__(self, dataset, seed, batch_size, train_frac):
+#         super().__init__()
+#         self.dataset = dataset
+#         self.seed = seed
+#         self.batch_size = batch_size
+#         self.train_frac = train_frac
+# 
+#     
+#     def setup(self, stage):
+#         train_size = int(self.train_frac * len(self.dataset))
+#         val_size = len(self.dataset) - train_size
+#         self.train, self.val = random_split(
+#                 self.dataset,
+#                 (train_size, val_size),
+#                 torch.Generator().manual_seed(self.seed)
+#         )
+#         self.val_size = val_size
+# 
+#     def train_dataloader(self):
+#         return DataLoader(self.train, self.batch_size, shuffle=True)
+#     
+#     def val_dataloader(self):
+#         return DataLoader(self.val, self.val_size)
+    
+def lower_tri(values, dim):
+    if values.shape[0] > 1:
+        L = torch.zeros(values.shape[0], dim, dim, device=values.device)
+        tril_ix = torch.tril_indices(dim, dim)
+        L[:, tril_ix[0], tril_ix[1]] = values
+    # special case for non-batched inputs
+    else:
+        L = torch.zeros(dim, dim, device=values.device)
+        tril_ix = torch.tril_indices(dim, dim)
+        L[tril_ix[0], tril_ix[1]] = values[0]
+    return L
+
+def diag(values):
+    if values.shape[0] > 1:
+        L = torch.diag_embed(values)
+    # special case for non-batched inputs
+    else:
+        L = torch.diag(values[0])
+    return L
+
+def contact_matrix(arr):
+    x, y = np.meshgrid(arr, arr)
+    return (x == y).astype(int)
+
+def save_results(posterior_params, val_losses, cfg):
+    if cfg.simulator.name in ["si-model", "crkp"]:
+        mu = posterior_params[0].item()
+        sigma = posterior_params[1].item()
+        print(np.round(mu, 3))
+        print(np.round(sigma, 3))
+        prior_mu = cfg.simulator["prior_mu"]
+        prior_sigma = cfg.simulator["prior_sigma"]
+    else:
+        mu = posterior_params[0].tolist()
+        L = posterior_params[1]
+        sigma = (L @ L.T).tolist()
+        sdiag = (L @ L.T).diag().tolist()
+        print(np.round(mu, 3))
+        print(np.round(sdiag, 3)) # marginal variances
+        prior_mu = cfg.simulator["prior_mu"]
+        prior_sigma = cfg.simulator["prior_sigma"]
+    results = {"mu": mu, "sigma":sigma,
+               "val_loss": val_losses[-1],
+               "n_sample": cfg.simulator["n_sample"],
+               "batch_size": cfg.train["batch_size"],
+               "N": cfg.simulator["N"],
+               "prior_mu": prior_mu,
+               "prior_sigma": prior_sigma,
+               "name": cfg.simulator["name"]}
+    for key in cfg["model"]:
+        results[key] = cfg["model"][key]
+    # should probably save seed, etc.
+    with open("results.yaml", "w", encoding="utf-8") as yaml_file:
+        yaml.dump(results, yaml_file)
+        
+# reading multiruns
+
+def get_results(path, drop=True, multirun=True):
+    extension =  "/results.yaml"
+    if multirun: extension = "/**" + extension
+    # if multirun:
+    #     extension = "/**/results.yaml"
+    # else:
+    #     extension = "/results.yaml"
+    results = glob.glob(path + extension)
+    data = dict()
+    for res in results:
+        with open(res, "r") as stream:
+            yml = yaml.safe_load(stream)
+            for k, v in yml.items():
+                if k not in data.keys():
+                    data[k] = [v]
+                else:
+                    data[k].append(v)
+    data = pd.DataFrame(data)
+    data.drop(columns=["_target_", "lr", "batch_size", "dropout", "seed"])
+    return data
+        
+# LIKELIHOOD BASED ESTIMATION
+
+def simulator(alpha, beta, gamma, N, T, seed, het=False):
+    if not het:
+        beta = [beta]
+    X  = np.empty((N, T))
+    np.random.seed(seed)
+    X[:, 0] = np.random.binomial(1, alpha, N)
+    F = np.arange(N) % 5
+    R = np.arange(N) % (N // 2)
+    fC = contact_matrix(F)
+    rC = contact_matrix(R)
+    for t in range(1, T):
+        I = X[:, t-1]
+        # components dependent on individual covariates
+        hazard = compute_hazard(beta, I, N, F, fC, rC, het)
+        p = 1 - np.exp(-hazard)
+        new_infections = np.random.binomial(1, p, N)
+        X[:, t] = np.where(I, np.ones(N), new_infections)
+        discharge = np.random.binomial(1, gamma, N)
+        screening = np.random.binomial(1, alpha, N)
+        X[:, t] = np.where(discharge, screening, X[:, t])
+    return X
+
+def compute_hazard(beta, I, N, F, fC, rC, het):
+    hazard = I.sum() * beta[0] * np.ones(N) / N
+    if het:
+        hazard += (fC * I).sum(1) * beta[F+1] / 60
+        hazard += (rC * I).sum(1) * beta[-1] / 2
+    return hazard
+
+def nll(beta, alpha, gamma, N, T, X, het):
+    # beta = beta / np.array([1, 300, 300, 300, 300, 300, 300])
+    return - x_loglikelihood(beta, alpha, gamma, N, T, X, het)
+
+def x_loglikelihood(beta, alpha, gamma, N, T, X, het=False):
+    ans = np.log(
+        alpha ** X[:, 0] * (1 - alpha) ** (1 - X[:, 0])
+        ).sum()
+    if not het:
+        beta = [beta]
+    F = np.arange(N) % 5
+    R = np.arange(N) % (N // 2)
+    fC = contact_matrix(F)
+    rC = contact_matrix(R)
+    for t in range(1, T):
+        xs = X[:, t-1]
+        xt = X[:, t]
+        hazard = compute_hazard(beta, xs, N, F, fC, rC, het)
+        ans += (xt * xs  * np.log(
+            gamma * alpha + (1 - gamma)
+        )).sum()
+        ans += (xt * (1 - xs)  * np.log(
+            gamma * alpha + (1 - gamma) * (1 - np.exp(- hazard))
+        )).sum()
+        ans += ((1 - xt) * xs  * np.log(
+            gamma * (1 - alpha) + 1e-8
+        )).sum()
+        ans += ((1 - xt) * (1 - xs) * np.log(
+            gamma *(1 - alpha) + (1 - gamma) * (np.exp(- hazard))
+        )).sum()
+    return ans
+
+
+### misc
+
+def lognormal_sd(log_mean, log_sd):
+    a = np.exp(log_sd**2) - 1
+    b = np.exp(2*log_mean + log_sd**2)
+    return (a*b)**0.5
+
+class MoonsDataset(Dataset):
+    def __init__(self, n_sample, random_state):
+        self.n_sample = n_sample
+        self.random_state = random_state
+        self.data = self._make_data()
+
+    def _make_data(self):
+        arr = make_moons(self.n_sample, noise=0.05, random_state=self.random_state)[0]
+        return torch.from_numpy(arr).float()
+
+    def __len__(self):
+        return self.n_sample
+    
+    def __getitem__(self, index):
+        return torch.empty(0), self.data[index]
+
+
+class GaussianDensityNetwork(L.LightningModule):
+    def __init__(self, d_x, d_theta, d_model, lr, weight_decay,
+                 mean_field):
+        super().__init__()
+        self.name = "gdn"
+        # compute number of outputs
+        self.dim = d_theta
+        # assume diagonal covariance matrix
+        if mean_field:
+            n_outputs = self.dim * 2
+        else:
+            n_outputs = self.dim + self.dim*(self.dim + 1) // 2
+        self.ff = torch.nn.Sequential(
+            Linear(d_x, d_model),
+            ReLU(),
+            Linear(d_model, d_model),
+            ReLU(),
+            Linear(d_model, d_model),
+            ReLU(),
+            Linear(d_model, n_outputs),
+        )
+        # eventually need to save this as an hparam if i am checkpointing models
+        self.lr = lr
+        self.wd = weight_decay
+        self.mean_field = mean_field
+        self.val_losses = []
+
+    def forward(self, x):
+        assert len(x.shape) == 2
+        y = self.ff(x)
+        mu = y[:, :self.dim]
+        sigma = y[:, self.dim:]
+        # case one: unidimensional or mean field
+        if self.dim == 1:
+            sigma = torch.exp(sigma)
+        elif self.mean_field:
+            sigma = diag(torch.exp(sigma))
+        else:
+            sigma = lower_tri(sigma, self.dim)
+            # force diagonal entries to be positive
+            sigma.diagonal(dim1=-2, dim2=-1).copy_(
+                sigma.diagonal(dim1=-2,dim2=-1).exp()
+            )
+        return mu, sigma
+    
+    def training_step(self, batch, batch_idx):
+        x, theta = batch
+        mu, sigma = self(x)
+        loss = self.gaussiannll(theta, mu, sigma)
+        self.log("train_loss", loss)
+        return loss
+
+    
+    def validation_step(self, batch, batch_idx):
+        x, theta = batch
+        assert len(theta.shape) > 1
+        mu, sigma = self(x)
+        loss = self.gaussiannll(theta, mu, sigma)
+        self.log("val_loss", loss)
+        return loss
+    
+    def on_validation_epoch_end(self):
+        # why was this so difficult to figure out
+        val_loss = self.trainer.callback_metrics["val_loss"].item()
+        self.val_losses.append(val_loss)
+
+    def gaussiannll(self, theta, mu, sigma):
+        p = self.dim
+        if p == 1:
+            normal = Normal(mu, sigma)
+            l = - normal.log_prob(theta)
+        else:
+            L = sigma
+            mvn = MultivariateNormal(loc=mu, scale_tril=L)
+            l = - mvn.log_prob(theta)
+
+        return l.mean()
+    
+
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.wd)
+    
+
+    def predict_step(self, x):
+        # this returns standard deviation
+        mu, sigma = self(x)
+        return mu, sigma
+    
+    # TODO would it make sense to have a "sample" method?

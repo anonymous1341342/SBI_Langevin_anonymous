@@ -83,6 +83,7 @@ def main():
     num_samples = 8000
     samples = posterior.sample((num_samples,), x=x_obs.unsqueeze(0), show_progress_bars=True)
 
+    os.makedirs("sample_res_all", exist_ok=True)
     np.save(f"sample_res_all/theta_post_NPE_newdeepsets_task{task_id}.npy", samples.cpu().numpy())
 
 

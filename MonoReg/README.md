@@ -1,6 +1,6 @@
 # Run each method
 
-Run all commands from this `MonoReg` folder.
+Run the commands below to obtain the main results for the monotonic regression example. This example is  to study the effect of the proposal distribution (Table 4, Table 5, and Figure 11). The corresponding code for these additional results is provided in the subfolder `choice_of_proposal`.
 
 ## Generate observed data
 
@@ -77,3 +77,16 @@ Sampling is run directly in one script.
 
 # Summarize results
 Use `res_summary.ipynb` to get Table 2. Use `plots.ipynb` to get Figure 1 and Figure 5. Use `compare_loss.R` to get Figure 2 and Figure 14.
+
+For Figure 1, also train the score matching model using the prior as the proposal distribution:
+
+```bash
+python .\train_prior_prop.py 0
+```
+
+
+To obtain Figure 10, which compares the localization performance of NPE and the proposed localization method, run 
+```bash
+python .\NPE_embed_diffrefsize.py
+```
+and use NPEres_diffsize.ipynb to make plots.

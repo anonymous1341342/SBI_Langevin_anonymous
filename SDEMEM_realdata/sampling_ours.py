@@ -187,6 +187,7 @@ def main():
     samples = samples_norm * prop_std.cpu() + prop_mean.cpu()
 
     theta_post = samples[2000::10, :, :].reshape(-1, theta_dim)
+    os.makedirs("sample_res_all", exist_ok=True)
     np.save(f"sample_res_all/theta_post_precond_mchain_sameprior_task{task_id}.npy", theta_post.cpu().numpy())
 
 

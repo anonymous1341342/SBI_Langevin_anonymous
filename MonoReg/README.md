@@ -1,6 +1,6 @@
 # Run each method
 
-Run the commands below to obtain the main results for the monotonic regression example. This example is  to study the effect of the proposal distribution (Table 4, Table 5, and Figure 11). The corresponding code for these additional results is provided in the subfolder `choice_of_proposal`.
+Run the commands below to obtain the main results for the monotonic regression example. This example is also used to study the effect of the proposal distribution (Table 4, Table 5, and Figure 11), and the corresponding code is provided in the subfolder `choice_of_proposal`.
 
 ## Generate observed data
 

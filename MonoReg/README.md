@@ -78,7 +78,7 @@ Sampling is run directly in one script.
 # Summarize results
 Use `res_summary.ipynb` to get Table 2. Use `plots.ipynb` to get Figure 1 and Figure 5. Use `compare_loss.R` to get Figure 2 and Figure 14.
 
-For Figure 1, also train the score matching model using the prior as the proposal distribution:
+Before obtaining Figure 1, also train the score matching model using the prior as the proposal distribution:
 
 ```bash
 python .\train_prior_prop.py 0

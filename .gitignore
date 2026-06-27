@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editors and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Local outputs
+outputs/
+results/
+figures/generated/
+checkpoints/
+tmp/
+
+# Large binary artifacts
+*.pt
+*.pth
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.joblib
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.rds
+*.h5
+*.hdf5
+
+# Environment files with local machine details
+.env
+.python-version
